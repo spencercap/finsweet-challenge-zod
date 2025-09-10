@@ -1,6 +1,8 @@
 # Doz - Type-Safe Data Validation Library
 
-_FYI: this is a clone of [zod](https://zod.dev/) for the finsweet interview's coding challenge_
+> _FYI: this is a CLONE of [zod](https://zod.dev/) for the finsweet interview's coding challenge_
+
+> I also made another Class-based version of this [clone here](https://github.com/spencercap/finsweet-challenge-zod/tree/class-version)
 
 A lightweight TypeScript library for runtime type validation and parsing of unknown data structures.
 
