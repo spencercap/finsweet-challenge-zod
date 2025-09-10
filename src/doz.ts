@@ -82,9 +82,12 @@ const createBooleanParser = () => {
 // Type for basic parsers (no circular dependency)
 type BasicDozSchema = ReturnType<typeof createStringParser> | ReturnType<typeof createNumberParser> | ReturnType<typeof createBooleanParser>;
 
-const createArrayParser = (schema: BasicDozSchema) => {
+// Helper type to extract the parsed type from a schema
+type InferParsedType<T> = T extends { parse: (input: unknown) => infer R } ? R : never;
+
+const createArrayParser = <T extends BasicDozSchema>(schema: T) => {
     return {
-        parse: (i: unknown) => {
+        parse: (i: unknown): InferParsedType<T>[] => {
             if (!Array.isArray(i)) {
                 throw createTypeError('array', i);
             }
@@ -93,14 +96,14 @@ const createArrayParser = (schema: BasicDozSchema) => {
                 schema.parse(item);
             }
 
-            return i;
+            return i as InferParsedType<T>[];
         }
     };
 };
 
-const createObjectParser = (schema: Record<string, BasicDozSchema>) => {
+const createObjectParser = <T extends Record<string, BasicDozSchema>>(schema: T) => {
     return {
-        parse: (i: unknown) => {
+        parse: (i: unknown): { [K in keyof T]: InferParsedType<T[K]> } => {
             if (typeof i !== 'object' || i === null) {
                 throw createTypeError('object', i);
             }
@@ -123,13 +126,13 @@ const createObjectParser = (schema: Record<string, BasicDozSchema>) => {
                 }
             }
 
-            return result;
+            return result as { [K in keyof T]: InferParsedType<T[K]> };
         }
     };
 };
 
 // Complete type for all doz method return types (defined after all functions)
-type DozSchema = BasicDozSchema | ReturnType<typeof createArrayParser> | ReturnType<typeof createObjectParser>;
+export type DozSchema = BasicDozSchema | ReturnType<typeof createArrayParser<any>> | ReturnType<typeof createObjectParser<any>>;
 
 export const doz = {
     string: createStringParser,

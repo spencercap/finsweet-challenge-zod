@@ -1,5 +1,7 @@
 import { doz } from './doz';
 
+// test doz lib
+
 // string
 const dStr = doz.string();
 const testStr = '123';
@@ -40,3 +42,10 @@ const testObj = {
 };
 const parsedObj = inObj.parse(testObj);
 console.log('parsedObj', parsedObj);
+
+// infered type test
+// const inferTypeTest: number = parsedObj.isStudent;
+
+if (typeof parsedObj.isStudent === 'boolean') {
+    console.log('parsedObj.isStudent is boolean');
+}
