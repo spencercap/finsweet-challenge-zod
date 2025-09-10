@@ -1,23 +1,4 @@
-// doz
-
-// export default class doz  {
-//     constructor(data: unknown) {
-//         //
-//     }
-
-//     public parse(data: unknown) {
-        
-//     }
-
-//     public string(s: unknown) {
-//         if (typeof s === 'string') {
-//             return s;
-//         }
-//         return String(s);
-//     }
-
-// }
-
+// doz - Class-based Type-Safe Data Validation Library
 
 // Error builder that infers expected type from method name
 const createTypeError = (expectedType: string, actualValue: unknown, context?: string) => {
@@ -44,100 +25,105 @@ const createValidationError = (message: string, context?: string) => {
     return new Error(`${message}${contextMessage}`);
 };
 
+// Base class for all doz schemas
+abstract class DozSchema<T> {
+    abstract parse(input: unknown): T;
+}
 
-// Externalized methods
-const createStringParser = () => {
-    return {
-        parse: (i: unknown): string => {
-            if (typeof i !== 'string') {
-                throw createTypeError('string', i);
-            }
-            return i;
+// Primitive type classes
+class DozString extends DozSchema<string> {
+    parse(input: unknown): string {
+        if (typeof input !== 'string') {
+            throw createTypeError('string', input);
         }
-    };
-};
+        return input;
+    }
+}
 
-const createNumberParser = () => {
-    return {
-        parse: (i: unknown): number => {
-            if (typeof i !== 'number') {
-                throw createTypeError('number', i);
-            }
-            return i;
+class DozNumber extends DozSchema<number> {
+    parse(input: unknown): number {
+        if (typeof input !== 'number') {
+            throw createTypeError('number', input);
         }
-    };
-};
+        return input;
+    }
+}
 
-const createBooleanParser = () => {
-    return {
-        parse: (i: unknown): boolean => {
-            if (typeof i !== 'boolean') {
-                throw createTypeError('boolean', i);
-            }
-            return i;
+class DozBoolean extends DozSchema<boolean> {
+    parse(input: unknown): boolean {
+        if (typeof input !== 'boolean') {
+            throw createTypeError('boolean', input);
         }
-    };
-};
+        return input;
+    }
+}
 
-// Type for basic parsers (no circular dependency)
-type BasicDozSchema = ReturnType<typeof createStringParser> | ReturnType<typeof createNumberParser> | ReturnType<typeof createBooleanParser>;
+// Array class
+class DozArray<T> extends DozSchema<T[]> {
+    private elementSchema: DozSchema<T>;
+    
+    constructor(elementSchema: DozSchema<T>) {
+        super();
+        this.elementSchema = elementSchema;
+    }
 
-// Helper type to extract the parsed type from a schema
-type InferParsedType<T> = T extends { parse: (input: unknown) => infer R } ? R : never;
-
-const createArrayParser = <T extends BasicDozSchema>(schema: T) => {
-    return {
-        parse: (i: unknown): InferParsedType<T>[] => {
-            if (!Array.isArray(i)) {
-                throw createTypeError('array', i);
-            }
-
-            for (const item of i) {
-                schema.parse(item);
-            }
-
-            return i as InferParsedType<T>[];
+    parse(input: unknown): T[] {
+        if (!Array.isArray(input)) {
+            throw createTypeError('array', input);
         }
-    };
-};
 
-const createObjectParser = <T extends Record<string, BasicDozSchema>>(schema: T) => {
-    return {
-        parse: (i: unknown): { [K in keyof T]: InferParsedType<T[K]> } => {
-            if (typeof i !== 'object' || i === null) {
-                throw createTypeError('object', i);
+        for (const item of input) {
+            this.elementSchema.parse(item);
+        }
+
+        return input as T[];
+    }
+}
+
+// Object class
+class DozObject<T extends Record<string, any>> extends DozSchema<T> {
+    private schema: { [K in keyof T]: DozSchema<T[K]> };
+    
+    constructor(schema: { [K in keyof T]: DozSchema<T[K]> }) {
+        super();
+        this.schema = schema;
+    }
+
+    parse(input: unknown): T {
+        if (typeof input !== 'object' || input === null) {
+            throw createTypeError('object', input);
+        }
+
+        const obj = input as Record<string, unknown>;
+        const result: Record<string, unknown> = {};
+
+        for (const [key, valueSchema] of Object.entries(this.schema)) {
+            if (!(key in obj)) {
+                throw createValidationError(`Missing required property: ${key}`);
             }
-
-            const obj = i as Record<string, unknown>;
-            const result: Record<string, unknown> = {};
-
-            for (const [key, valueSchema] of Object.entries(schema)) {
-                if (!(key in obj)) {
-                    throw createValidationError(`Missing required property: ${key}`);
+            try {
+                result[key] = valueSchema.parse(obj[key]);
+            } catch (error) {
+                // Re-throw with key context if it's a type error
+                if (error instanceof Error && error.message.includes('Expected')) {
+                    throw createTypeError(error.message.split('Expected ')[1].split(',')[0], obj[key], `for property: '${key}'`);
                 }
-                try {
-                    result[key] = valueSchema.parse(obj[key]);
-                } catch (error) {
-                    // Re-throw with key context if it's a type error
-                    if (error instanceof Error && error.message.includes('Expected')) {
-                        throw createTypeError(error.message.split('Expected ')[1].split(',')[0], obj[key], `for property: '${key}'`);
-                    }
-                    throw error;
-                }
+                throw error;
             }
-
-            return result as { [K in keyof T]: InferParsedType<T[K]> };
         }
-    };
-};
 
-// Complete type for all doz method return types (defined after all functions)
-export type DozSchema = BasicDozSchema | ReturnType<typeof createArrayParser<any>> | ReturnType<typeof createObjectParser<any>>;
+        return result as T;
+    }
+}
 
+// Export the main doz object with class constructors
 export const doz = {
-    string: createStringParser,
-    number: createNumberParser,
-    boolean: createBooleanParser,
-    array: createArrayParser,
-    object: createObjectParser
+    string: () => new DozString(),
+    number: () => new DozNumber(),
+    boolean: () => new DozBoolean(),
+    array: <T>(elementSchema: DozSchema<T>) => new DozArray(elementSchema),
+    object: <T extends Record<string, any>>(schema: { [K in keyof T]: DozSchema<T[K]> }) => new DozObject(schema)
 };
+
+// Export the base class and specific classes for advanced usage
+export { DozSchema, DozString, DozNumber, DozBoolean, DozArray, DozObject };
